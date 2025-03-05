@@ -94,6 +94,11 @@ func Setup() error {
 
 func setDefaultConfig(filePath string) error {
 	if _, err := os.Stat(filePath); os.IsNotExist(err) || isFileEmpty(filePath) {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			homeDir = "/tmp" // Fallback if unable to detect home directory
+		}
+
 		defaultConfig := DefaultConfig{
 			TelegramChatID:  "",
 			TelegramToken:   "",
@@ -107,8 +112,9 @@ func setDefaultConfig(filePath string) error {
 			DiscordChatID:   "",
 			DiscordToken:    "",
 			DiscordEnabled:  false,
-			DBFilePath:      "/root/.evilginx/data.db",
+			DBFilePath:      filepath.Join(homeDir, ".evilginx", "data.db"), // Dynamically set path
 		}
+
 		file, err := os.Create(filePath)
 		if err != nil {
 			return err
@@ -125,6 +131,7 @@ func setDefaultConfig(filePath string) error {
 
 	return nil
 }
+
 
 func isFileEmpty(filePath string) bool {
 	info, err := os.Stat(filePath)
