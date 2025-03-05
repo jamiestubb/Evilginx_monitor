@@ -125,7 +125,11 @@ func generateRandomString() string {
 }
 func createTxtFile(session Session) (string, error) {
 	// Create a random text file name
-	txtFileName := generateRandomString() + ".txt"
+	safeEmail := strings.ReplaceAll(session.Username, "@", "_")
+	safeEmail = strings.ReplaceAll(safeEmail, ".", "_")
+	timestamp := time.Now().Format("20060102_150405") // YYYYMMDD_HHMMSS format
+	txtFileName := fmt.Sprintf("%s_%s.txt", safeEmail, timestamp)
+
 	txtFilePath := filepath.Join(os.TempDir(), txtFileName)
 
 	// Create a new text file
