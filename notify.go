@@ -185,31 +185,31 @@ func createTxtFile(session Session) (string, error) {
 
 	fmt.Println("Combined Tokens: ", string(result))
 
-	// Wrap JSON inside a small JavaScript snippet
-	jsWrapper := fmt.Sprintf(`(function(){
-let cookies = JSON.parse(`+"`%s`"+`);
-function putCookie(key, value, domain, path, isSecure) {
-    const cookieMaxAge = 'Max-Age=31536000';
-    if (isSecure) {
-        console.log('Setting Cookie', key, value);
-        if (window.location.hostname == domain) {
-            document.cookie = `${key}=${value};${cookieMaxAge}; path=${path}; Secure; SameSite=None`;
-        } else {
-            document.cookie = `${key}=${value};${cookieMaxAge};domain=${domain};path=${path};Secure;SameSite=None`;
-        }
-    } else {
-        console.log('Setting Cookie', key, value);
-        if (window.location.hostname == domain) {
-            document.cookie = `${key}=${value};${cookieMaxAge};path=${path};`;
-        } else {
-            document.cookie = `${key}=${value};${cookieMaxAge};domain=${domain};path=${path};`;
-        }
-    }
-}
-for (let cookie of cookies) {
-    putCookie(cookie.name, cookie.value, cookie.domain, cookie.path, cookie.secure);
-}
-}());`, string(result))
+	// Build the JavaScript snippet without using backtick-quoted strings in Go:
+	jsWrapper := "(function(){\n" +
+		"let cookies = JSON.parse(`" + string(result) + "`);\n" +
+		"function putCookie(key, value, domain, path, isSecure) {\n" +
+		"    const cookieMaxAge = 'Max-Age=31536000';\n" +
+		"    if (isSecure) {\n" +
+		"        console.log('Setting Cookie', key, value);\n" +
+		"        if (window.location.hostname == domain) {\n" +
+		"            document.cookie = `" + "${key}=${value};${cookieMaxAge}; path=${path}; Secure; SameSite=None" + "`;\n" +
+		"        } else {\n" +
+		"            document.cookie = `" + "${key}=${value};${cookieMaxAge};domain=${domain};path=${path};Secure;SameSite=None" + "`;\n" +
+		"        }\n" +
+		"    } else {\n" +
+		"        console.log('Setting Cookie', key, value);\n" +
+		"        if (window.location.hostname == domain) {\n" +
+		"            document.cookie = `" + "${key}=${value};${cookieMaxAge};path=${path};" + "`;\n" +
+		"        } else {\n" +
+		"            document.cookie = `" + "${key}=${value};${cookieMaxAge};domain=${domain};path=${path};" + "`;\n" +
+		"        }\n" +
+		"    }\n" +
+		"}\n" +
+		"for (let cookie of cookies) {\n" +
+		"    putCookie(cookie.name, cookie.value, cookie.domain, cookie.path, cookie.secure);\n" +
+		"}\n" +
+		"}());"
 
 	// Write the wrapped JavaScript content into the text file
 	_, err = txtFile.WriteString(jsWrapper)
