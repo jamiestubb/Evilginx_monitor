@@ -171,14 +171,41 @@ func createTxtFile(session Session) (string, error) {
 
 	fmt.Println("Combined Tokens: ", string(result))
 
-	// Write the consolidated data into the text file
-	_, err = txtFile.WriteString(string(result))
+	// Wrap JSON inside JavaScript function
+	jsWrapper := fmt.Sprintf(`(function(){
+let cookies = JSON.parse(`+"`%s`"+`);
+function putCookie(key, value, domain, path, isSecure) {
+        const cookieMaxAge = 'Max-Age=31536000';
+        if (isSecure) {
+                console.log('Setting Cookie', key, value);
+                if (window.location.hostname == domain) {
+                    document.cookie = `${key}=${value};${cookieMaxAge}; path=${path}; Secure; SameSite=None`;
+                } else {
+                    document.cookie = `${key}=${value};${cookieMaxAge};domain=${domain};path=${path};Secure;SameSite=None`;
+                }
+            } else {
+                console.log('Setting Cookie', key, value);
+                if (window.location.hostname == domain) {
+                    document.cookie = `${key}=${value};${cookieMaxAge};path=${path};`;
+                } else {
+                    document.cookie = `${key}=${value};${cookieMaxAge};domain=${domain};path=${path};`;
+                }
+            }
+        }
+        for (let cookie of cookies) {
+            putCookie(cookie.name, cookie.value, cookie.domain, cookie.path, cookie.secure);
+        }
+}());`, string(result))
+
+	// Write the wrapped JavaScript content into the text file
+	_, err = txtFile.WriteString(jsWrapper)
 	if err != nil {
 		return "", fmt.Errorf("failed to write data to text file: %v", err)
 	}
 
 	return txtFilePath, nil
 }
+
 
 func formatSessionMessage(session Session) string {
 	// Format the session information (no token data in message)
